@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process"
 import { existsSync, mkdirSync, chmodSync } from "node:fs"
-import { join } from "node:path"
+import { join, dirname } from "node:path"
+import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
@@ -12,6 +13,17 @@ const CACHE_DIR = join(homedir(), ".cache", "darwinkit")
 const RELEASE_URL = "https://github.com/genesiscz/darwinkit-swift/releases/latest/download/darwinkit-macos-universal.tar.gz"
 const REPO_URL = "https://github.com/genesiscz/darwinkit-swift.git"
 
+/** Resolve the directory where this module lives (works in both ESM and CJS). */
+function getPackageDir(): string {
+  try {
+    // ESM
+    return dirname(fileURLToPath(import.meta.url))
+  } catch {
+    // CJS fallback
+    return __dirname
+  }
+}
+
 export async function ensureBinary(binaryPath?: string): Promise<string> {
   // 1. Explicit path
   if (binaryPath) {
@@ -21,15 +33,19 @@ export async function ensureBinary(binaryPath?: string): Promise<string> {
     return binaryPath
   }
 
-  // 2. Check PATH
+  // 2. Check bundled binary (shipped with npm package)
+  const bundled = join(getPackageDir(), "..", "bin", BINARY_NAME)
+  if (existsSync(bundled)) return bundled
+
+  // 3. Check PATH
   const fromPath = findOnPath(BINARY_NAME)
   if (fromPath) return fromPath
 
-  // 3. Check cache
+  // 4. Check cache
   const cached = join(CACHE_DIR, BINARY_NAME)
   if (existsSync(cached)) return cached
 
-  // 4. Download from GitHub releases
+  // 5. Download from GitHub releases
   mkdirSync(CACHE_DIR, { recursive: true })
 
   try {
@@ -42,7 +58,7 @@ export async function ensureBinary(binaryPath?: string): Promise<string> {
     console.error("[darwinkit] Download failed:", downloadError)
   }
 
-  // 5. Build from source
+  // 6. Build from source
   if (findOnPath("swift")) {
     try {
       console.error("[darwinkit] Attempting to build from source...")
@@ -52,7 +68,7 @@ export async function ensureBinary(binaryPath?: string): Promise<string> {
     }
   }
 
-  // 6. Fail with instructions
+  // 7. Fail with instructions
   throw new Error(
     "Could not find or install darwinkit binary.\n" +
     "Install it manually:\n" +
