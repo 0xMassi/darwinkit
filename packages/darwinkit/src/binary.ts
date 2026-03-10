@@ -105,7 +105,7 @@ async function buildFromSource(outputPath: string): Promise<string> {
       },
     )
 
-    const builtBinary = join(tmpDir, "darwinkit-swift", "packages", "darwinkit-swift", ".build", "release", "darwinkit")
+    const builtBinary = join(tmpDir, "darwinkit-swift", "packages", "darwinkit-swift", ".build", "apple", "Products", "Release", "darwinkit")
     const { copyFileSync } = await import("node:fs")
     copyFileSync(builtBinary, outputPath)
     chmodSync(outputPath, 0o755)

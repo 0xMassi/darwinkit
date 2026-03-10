@@ -10,7 +10,7 @@ echo "Building universal binary..."
 swift build -c release --arch arm64 --arch x86_64
 
 TARBALL="darwinkit-macos-universal.tar.gz"
-tar -czf "$SCRIPT_DIR/$TARBALL" -C .build/release darwinkit
+tar -czf "$SCRIPT_DIR/$TARBALL" -C .build/apple/Products/Release darwinkit
 
 cd "$SCRIPT_DIR"
 

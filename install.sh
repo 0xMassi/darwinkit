@@ -17,7 +17,7 @@ cd "$TMPDIR/darwinkit-swift/packages/darwinkit-swift"
 echo "Building universal binary (this may take a minute)..."
 swift build -c release --arch arm64 --arch x86_64
 
-cp .build/release/darwinkit "$INSTALL_DIR/darwinkit"
+cp .build/apple/Products/Release/darwinkit "$INSTALL_DIR/darwinkit"
 echo "darwinkit installed to $INSTALL_DIR/darwinkit"
 
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
