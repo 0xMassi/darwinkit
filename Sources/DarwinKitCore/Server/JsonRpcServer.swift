@@ -1,8 +1,13 @@
 import Foundation
 
+/// Protocol for handlers that need to push async notifications to the parent process.
+public protocol NotificationSink: AnyObject {
+    func sendNotification(method: String, params: Any)
+}
+
 /// Handles JSON-RPC communication over stdin/stdout.
 /// Reads NDJSON requests from stdin, dispatches to registered handlers, writes responses to stdout.
-public final class JsonRpcServer {
+public final class JsonRpcServer: NotificationSink {
     public static let version = "0.1.0"
 
     private let router: MethodRouter

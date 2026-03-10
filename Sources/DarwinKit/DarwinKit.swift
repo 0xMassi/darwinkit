@@ -19,8 +19,7 @@ struct Serve: ParsableCommand {
     )
 
     mutating func run() {
-        let router = buildRouter()
-        let server = JsonRpcServer(router: router)
+        let server = buildServerWithRouter()
         server.start()
     }
 }
@@ -52,11 +51,27 @@ struct Query: ParsableCommand {
     }
 }
 
-/// Central router factory — all handlers registered here.
+/// Build server and router together so handlers can receive the server as NotificationSink.
+func buildServerWithRouter() -> JsonRpcServer {
+    let router = MethodRouter()
+    let server = JsonRpcServer(router: router)
+
+    router.register(SystemHandler(router: router))
+    router.register(NLPHandler())
+    router.register(VisionHandler())
+    router.register(CloudHandler(notificationSink: server))
+    router.register(AuthHandler())
+
+    return server
+}
+
+/// Central router factory — all handlers registered here (for single-shot Query mode).
 func buildRouter() -> MethodRouter {
     let router = MethodRouter()
     router.register(SystemHandler(router: router))
     router.register(NLPHandler())
     router.register(VisionHandler())
+    router.register(CloudHandler())
+    router.register(AuthHandler())
     return router
 }
