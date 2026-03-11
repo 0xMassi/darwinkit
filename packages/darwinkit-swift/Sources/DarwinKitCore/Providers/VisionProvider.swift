@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Vision
 
@@ -42,7 +43,10 @@ public struct AppleVisionProvider: VisionProvider {
 
         let request = VNRecognizeTextRequest { request, error in
             if let error = error {
-                FileHandle.standardError.write(Data("[darwinkit] OCR error: \(error.localizedDescription)\n".utf8))
+                let errMsg = "[darwinkit] OCR error: \(error.localizedDescription)\n"
+                errMsg.utf8.withContiguousStorageIfAvailable { buf in
+                    _ = Darwin.write(STDERR_FILENO, buf.baseAddress, buf.count)
+                }
                 return
             }
 

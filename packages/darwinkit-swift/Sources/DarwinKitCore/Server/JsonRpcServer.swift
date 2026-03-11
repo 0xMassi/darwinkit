@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Protocol for handlers that need to push async notifications to the parent process.
@@ -23,6 +24,9 @@ public final class JsonRpcServer: NotificationSink {
 
     /// Start the server. Blocks until stdin is closed.
     public func start() {
+        // Ignore SIGPIPE so broken-pipe returns EPIPE instead of killing the process
+        signal(SIGPIPE, SIG_IGN)
+
         // Disable stdout buffering — critical when piped to a parent process.
         // Without this, responses accumulate in a 4KB buffer and the parent never sees them.
         setbuf(stdout, nil)
@@ -104,18 +108,28 @@ public final class JsonRpcServer: NotificationSink {
         ]
         if let data = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]),
            let str = String(data: data, encoding: .utf8) {
-            print(str)
+            safeWriteStdout(str + "\n")
         }
     }
 
     private func writeLine(_ response: JsonRpcResponse) {
         if let data = try? encoder.encode(response),
            let str = String(data: data, encoding: .utf8) {
-            print(str)
+            safeWriteStdout(str + "\n")
+        }
+    }
+
+    /// Write to stdout using POSIX write() — returns silently on broken pipe.
+    private func safeWriteStdout(_ string: String) {
+        string.utf8.withContiguousStorageIfAvailable { buf in
+            _ = Darwin.write(STDOUT_FILENO, buf.baseAddress, buf.count)
         }
     }
 
     func log(_ message: String) {
-        FileHandle.standardError.write(Data("[darwinkit] \(message)\n".utf8))
+        let msg = "[darwinkit] \(message)\n"
+        msg.utf8.withContiguousStorageIfAvailable { buf in
+            _ = Darwin.write(STDERR_FILENO, buf.baseAddress, buf.count)
+        }
     }
 }

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Protocol for iCloud file operations and monitoring.
@@ -283,6 +284,9 @@ public final class AppleCloudProvider: NSObject, CloudProvider {
     }
 
     private func log(_ message: String) {
-        FileHandle.standardError.write(Data("[darwinkit:cloud] \(message)\n".utf8))
+        let msg = "[darwinkit:cloud] \(message)\n"
+        msg.utf8.withContiguousStorageIfAvailable { buf in
+            _ = Darwin.write(STDERR_FILENO, buf.baseAddress, buf.count)
+        }
     }
 }

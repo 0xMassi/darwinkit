@@ -4,23 +4,26 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NPM_ONLY=false
 SKIP_NPM=false
+BUILD_ONLY=false
 VERSION=""
 NPM_OTP=""
 
 # Parse flags
 for arg in "$@"; do
   case "$arg" in
-    --npm-only)  NPM_ONLY=true ;;
-    --skip-npm)  SKIP_NPM=true ;;
-    --otp=*)     NPM_OTP="${arg#--otp=}" ;;
-    --*)         echo "Unknown flag: $arg"; exit 1 ;;
-    *)           VERSION="$arg" ;;
+    --npm-only)    NPM_ONLY=true ;;
+    --skip-npm)    SKIP_NPM=true ;;
+    --build-only)  BUILD_ONLY=true ;;
+    --otp=*)       NPM_OTP="${arg#--otp=}" ;;
+    --*)           echo "Unknown flag: $arg"; exit 1 ;;
+    *)             VERSION="$arg" ;;
   esac
 done
 
-if [ -z "$VERSION" ]; then
-  echo "Usage: ./release.sh <version> [--npm-only] [--skip-npm] [--otp=CODE]"
+if [ "$BUILD_ONLY" = false ] && [ -z "$VERSION" ]; then
+  echo "Usage: ./release.sh <version> [--npm-only] [--skip-npm] [--build-only] [--otp=CODE]"
   echo ""
+  echo "  --build-only Build Swift binary + TS SDK only (no release, no publish)"
   echo "  --npm-only   Only publish to npm (skip GitHub release)"
   echo "  --skip-npm   Only create GitHub release (skip npm publish)"
   echo "  --otp=CODE   npm OTP code for 2FA (or pass NPM_PUBLISH_TOKEN env var)"
@@ -45,6 +48,23 @@ if [ ! -f "$BINARY" ]; then
   echo "Error: Binary not found at $BINARY"
   echo "Run without --npm-only first, or build manually."
   exit 1
+fi
+
+# ── Build-only mode ───────────────────────────────────
+if [ "$BUILD_ONLY" = true ]; then
+  echo "Copying binary to SDK..."
+  mkdir -p "$SDK_DIR/bin"
+  cp "$BINARY" "$SDK_DIR/bin/darwinkit"
+  chmod 755 "$SDK_DIR/bin/darwinkit"
+
+  echo "Building TypeScript SDK..."
+  cd "$SDK_DIR"
+  bun install --frozen-lockfile 2>/dev/null || bun install
+  bun run build
+
+  echo "Build complete. Binary: $SDK_DIR/bin/darwinkit"
+  echo "To link into another project: cd $SDK_DIR && bun link"
+  exit 0
 fi
 
 # ── GitHub release ──────────────────────────────────────
@@ -94,9 +114,6 @@ if [ "$SKIP_NPM" = false ]; then
 
     echo "Publishing to npm..."
     $PUBLISH_CMD
-
-    # Clean up bundled binary from source tree
-    rm -rf "$SDK_DIR/bin/darwinkit"
 
     echo "Published @genesiscz/darwinkit@$VERSION to npm."
   else
