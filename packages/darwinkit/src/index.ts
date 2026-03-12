@@ -25,6 +25,7 @@ export type {
   EmbedResult,
   DistanceParams,
   DistanceResult,
+  Neighbor,
   NeighborsParams,
   NeighborsResult,
   TagScheme,

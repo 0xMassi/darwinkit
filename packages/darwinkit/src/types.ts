@@ -32,8 +32,12 @@ export interface NeighborsParams {
   type?: EmbedType // default: "word"
   count?: number // default: 5
 }
+export interface Neighbor {
+  text: string
+  distance: number
+}
 export interface NeighborsResult {
-  neighbors: Array<{ text: string; distance: number }>
+  neighbors: Neighbor[]
 }
 
 export type TagScheme =
