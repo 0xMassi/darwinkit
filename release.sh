@@ -33,6 +33,7 @@ fi
 SWIFT_DIR="$SCRIPT_DIR/packages/darwinkit-swift"
 SDK_DIR="$SCRIPT_DIR/packages/darwinkit"
 TARBALL="darwinkit-macos-universal.tar.gz"
+GH_REPO="genesiscz/darwinkit-swift"
 
 # ── Build universal binary ──────────────────────────────
 if [ "$NPM_ONLY" = false ]; then
@@ -73,16 +74,10 @@ if [ "$NPM_ONLY" = false ]; then
   tar -czf "$SCRIPT_DIR/$TARBALL" -C "$SWIFT_DIR/.build/apple/Products/Release" darwinkit
 
   echo "Creating GitHub release $VERSION..."
-  if ! gh release create "$VERSION" "$SCRIPT_DIR/$TARBALL" \
+  gh release create "$VERSION" "$SCRIPT_DIR/$TARBALL" \
+    --repo "$GH_REPO" \
     --title "$VERSION" \
-    --generate-notes 2>/dev/null; then
-    echo "gh release create failed, falling back to API..."
-    gh api repos/{owner}/{repo}/releases \
-      -f tag_name="$VERSION" \
-      -f name="$VERSION" \
-      -F generate_release_notes=true > /dev/null
-    gh release upload "$VERSION" "$SCRIPT_DIR/$TARBALL"
-  fi
+    --generate-notes
 
   rm "$SCRIPT_DIR/$TARBALL"
   echo "GitHub release $VERSION created."
