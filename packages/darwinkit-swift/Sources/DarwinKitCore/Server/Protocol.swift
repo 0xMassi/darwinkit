@@ -170,6 +170,10 @@ public struct AnyCodable: Codable, @unchecked Sendable {
             try container.encode(bool)
         case let int as Int:
             try container.encode(int)
+        case let int64 as Int64:
+            try container.encode(int64)
+        case let float as Float:
+            try container.encode(float)
         case let double as Double:
             try container.encode(double)
         case let string as String:
