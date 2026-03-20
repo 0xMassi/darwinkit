@@ -207,7 +207,7 @@ struct CoreMLHandlerTests {
 
         #expect(result["id"] as? String == "minilm")
         #expect(result["dimensions"] as? Int == 384)
-        #expect(result["size_bytes"] as? Int == 45_000_000)
+        #expect(result["size_bytes"] as? Int64 == 45_000_000)
     }
 
     @Test("model_info throws on unknown model")
@@ -258,7 +258,7 @@ struct CoreMLHandlerTests {
         ])
         let result = try handler.handle(request) as! [String: Any]
 
-        let vector = result["vector"] as? [Float] ?? result["vector"] as? [Double] ?? []
+        let vector = result["vector"] as! [Float]
         #expect(!vector.isEmpty)
         #expect(result["dimensions"] as? Int == vector.count)
     }
@@ -357,7 +357,7 @@ struct CoreMLHandlerTests {
         ])
         let result = try handler.handle(request) as! [String: Any]
 
-        let vector = result["vector"] as? [Float] ?? result["vector"] as? [Double] ?? []
+        let vector = result["vector"] as! [Float]
         #expect(vector.count == 768)
         #expect(result["dimensions"] as? Int == 768)
     }
