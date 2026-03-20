@@ -59,6 +59,7 @@ func buildServerWithRouter() -> JsonRpcServer {
     router.register(SystemHandler(router: router))
     router.register(NLPHandler())
     router.register(VisionHandler())
+    router.register(CoreMLHandler(provider: AppleCoreMLProvider()))
     router.register(CloudHandler(notificationSink: server))
     router.register(AuthHandler())
 
@@ -71,6 +72,7 @@ func buildRouter() -> MethodRouter {
     router.register(SystemHandler(router: router))
     router.register(NLPHandler())
     router.register(VisionHandler())
+    router.register(CoreMLHandler(provider: AppleCoreMLProvider()))
     router.register(CloudHandler())
     router.register(AuthHandler())
     return router
