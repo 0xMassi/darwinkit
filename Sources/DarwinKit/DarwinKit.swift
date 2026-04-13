@@ -19,6 +19,22 @@ struct Serve: ParsableCommand {
     )
 
     mutating func run() {
+        // swift-transformers' Hub resolves some download targets
+        // relative to the current working directory. When we run as a
+        // sidecar inside Stik.app/Contents/MacOS, cwd is read-only, so
+        // any relative-path writes fail with
+        // "tokenizer.json.X.incomplete couldn't be moved to whisper-small"
+        // style errors. Pin cwd to ~/Library/Application Support/com.stik.app/
+        // (which we create lazily) so Hub has a writable sandbox.
+        let fm = FileManager.default
+        if let appSupport = fm.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first {
+            let base = appSupport.appendingPathComponent("com.stik.app", isDirectory: true)
+            try? fm.createDirectory(at: base, withIntermediateDirectories: true)
+            fm.changeCurrentDirectoryPath(base.path)
+        }
+
         let server = buildServerWithRouter()
         server.start()
     }
@@ -61,6 +77,7 @@ func buildServerWithRouter() -> JsonRpcServer {
     router.register(VisionHandler())
     router.register(CloudHandler(notificationSink: server))
     router.register(AuthHandler())
+    router.register(DictationHandler(notificationSink: server))
 
     return server
 }
@@ -73,5 +90,6 @@ func buildRouter() -> MethodRouter {
     router.register(VisionHandler())
     router.register(CloudHandler())
     router.register(AuthHandler())
+    router.register(DictationHandler())
     return router
 }

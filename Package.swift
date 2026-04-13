@@ -1,16 +1,20 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 5.10
 import PackageDescription
 
 let package = Package(
     name: "DarwinKit",
     platforms: [
-        .macOS(.v13)
+        // WhisperKit requires macOS 14+. All other DarwinKit handlers
+        // (NLP, Vision, Speech, iCloud) already work on 13+ but we bump
+        // the whole package to keep a single build matrix.
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "darwinkit", targets: ["DarwinKit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.9.0"),
     ],
     targets: [
         .executableTarget(
@@ -18,10 +22,23 @@ let package = Package(
             dependencies: [
                 "DarwinKitCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
-            ]
+            ],
+            // Info.plist used to be embedded via -sectcreate linker flag
+            // to satisfy TCC for mic access. That turned out to break
+            // AVAudioEngine's input node (zero-filled stream) because
+            // giving the sidecar its own CFBundleIdentifier changed how
+            // CoreAudio routes mic input. TCC attribution already works
+            // via the responsible-process chain up to com.stik.app,
+            // which has the entitlement + usage descriptions in its real
+            // Info.plist. Keep the file in the source tree for reference
+            // but explicitly exclude it from the build.
+            exclude: ["Info.plist"]
         ),
         .target(
-            name: "DarwinKitCore"
+            name: "DarwinKitCore",
+            dependencies: [
+                .product(name: "WhisperKit", package: "WhisperKit"),
+            ]
         ),
         .testTarget(
             name: "DarwinKitCoreTests",
