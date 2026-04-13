@@ -24,12 +24,17 @@ Your App (any language)          DarwinKit (Swift)          Apple Frameworks
 | `nlp.sentiment` | Sentiment analysis | NLTagger |
 | `nlp.language` | Language detection | NLLanguageRecognizer |
 | `vision.ocr` | Text extraction from images | VNRecognizeTextRequest |
+| `dictation.*` | Streaming voice-to-text (Whisper) | WhisperKit (CoreML) |
+| `auth.*` | Biometric / device-owner auth | LocalAuthentication |
+| `icloud.*` | Coordinated iCloud file sync | NSFileCoordinator |
 | `system.capabilities` | Query available methods + OS info | — |
+
+See [Method Reference](#method-reference) for parameter schemas.
 
 ## Requirements
 
-- macOS 13+ (Ventura)
-- Sentence embeddings require macOS 11+ (Big Sur)
+- **macOS 14+ (Sonoma)** — raised from 13 in v0.3.0 to support WhisperKit
+- Sentence embeddings work on macOS 11+ (Big Sur) if you build without dictation
 
 ## Install
 
@@ -247,6 +252,56 @@ Query version, OS info, and available methods.
 ```json
 {"jsonrpc":"2.0","id":"1","method":"system.capabilities","params":{}}
 ```
+
+### dictation.*
+
+Streaming voice-to-text via [WhisperKit](https://github.com/argmaxinc/WhisperKit). Models run fully on-device through CoreML on the Neural Engine — no audio ever leaves the machine.
+
+**Model management**
+
+| Method | Description |
+|--------|-------------|
+| `dictation.list_models` | Curated list of available Whisper variants with size + downloaded flag |
+| `dictation.status` | Currently installed + active model, any download in progress |
+| `dictation.download_model` | Start downloading a model; streams `dictation.download_progress` notifications |
+| `dictation.cancel_download` | Abort an in-flight download |
+| `dictation.delete_model` | Remove a downloaded model from disk |
+| `dictation.set_active_model` | Synchronously load a model into memory (blocks up to 180 s for CoreML compilation) |
+
+**Recognition**
+
+```json
+{"jsonrpc":"2.0","id":"1","method":"dictation.start","params":{
+  "language": "en",
+  "model_id": "openai_whisper-small"
+}}
+```
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `language` | string | no | auto-detect | ISO code: `en`, `it`, `fr`, `de`, … |
+| `model_id` | string | no | current or first installed | Whisper variant id from `list_models` |
+
+While recording, the server emits `dictation.partial` notifications with the running transcription:
+
+```json
+{"jsonrpc":"2.0","method":"dictation.partial","params":{"text":"hello world so far"}}
+```
+
+`dictation.stop` returns the final transcription:
+
+```json
+{"jsonrpc":"2.0","id":"2","method":"dictation.stop"}
+// → {"jsonrpc":"2.0","id":"2","result":{"text":"hello world so far"}}
+```
+
+**Where models live**
+
+```
+~/Library/Application Support/com.stik.app/WhisperModels/models/argmaxinc/whisperkit-coreml/<variant>/
+```
+
+The working directory is changed to `~/Library/Application Support/com.stik.app/` on startup so swift-transformers' Hub client can write its tokenizer cache to a sandbox-writable location.
 
 ---
 
@@ -665,30 +720,38 @@ while let Some(event) = rx.recv().await {
 
 ```
 darwinkit/
-  Package.swift                          # Swift 5.9, macOS 13+
+  Package.swift                          # Swift 5.10, macOS 14+
   Sources/
     DarwinKit/                           # Thin CLI entry point
       DarwinKit.swift                    # @main, serve + query subcommands
+      Info.plist                         # Bundle metadata + mic usage string
     DarwinKitCore/                       # All logic (importable by tests)
       Server/
         Protocol.swift                   # JSON-RPC types, AnyCodable
-        JsonRpcServer.swift              # stdin/stdout NDJSON loop
+        JsonRpcServer.swift              # stdin/stdout NDJSON loop + concurrent dispatch
         MethodRouter.swift               # Method dispatch + capabilities
       Handlers/
         SystemHandler.swift              # system.capabilities
         NLPHandler.swift                 # nlp.* methods
         VisionHandler.swift              # vision.ocr
+        CloudHandler.swift               # icloud.* methods
+        AuthHandler.swift                # auth.* methods
+        DictationHandler.swift           # dictation.* methods (streaming)
       Providers/
-        NLPProvider.swift                # Protocol + Apple NaturalLanguage impl
-        VisionProvider.swift             # Protocol + Apple Vision impl
+        NLPProvider.swift                # NaturalLanguage impl
+        VisionProvider.swift             # Apple Vision impl
+        CloudProvider.swift              # NSFileCoordinator impl
+        AuthProvider.swift               # LocalAuthentication impl
+        WhisperDictationProvider.swift   # WhisperKit impl
   Tests/
-    DarwinKitCoreTests/
-      ProtocolTests.swift                # JSON-RPC encoding/decoding
-      NLPHandlerTests.swift              # Mock provider tests
-      VisionHandlerTests.swift           # Mock provider tests
+    DarwinKitCoreTests/                  # Mock-backed unit tests
 ```
 
 All Apple framework calls are behind **provider protocols**. Tests use mock providers for deterministic, fast unit tests without requiring specific OS versions.
+
+### Concurrent dispatch
+
+Since v0.3.0 the JSON-RPC server dispatches each request onto a concurrent `DispatchQueue` (`darwinkit.dispatch`, `.userInitiated`) rather than running handlers inline on the stdin reader loop. This keeps fast calls (`nlp.sentiment`, `system.capabilities`) responsive while a slow handler — e.g. `dictation.set_active_model` blocking for 30–60 s on CoreML compilation — is in flight.
 
 ## Development
 
@@ -703,13 +766,18 @@ swift test --filter NLP        # Run NLP tests only
 
 ```bash
 swift build -c release --arch arm64 --arch x86_64
+# Binary at .build/apple/Products/Release/darwinkit
+# (NOT .build/release/ — multi-arch builds land under .build/apple/Products/)
 ```
 
 ## Roadmap
 
-- **v0.1.0** (current) — NLP + Vision + JSON-RPC server
-- **v0.2.0** — `speech.transcribe` via SFSpeechRecognizer
-- **v0.3.0** — `llm.generate` via Apple Foundation Models (macOS 26+)
+- **v0.1.0** — NLP + Vision + JSON-RPC server
+- **v0.2.0** — `auth.*` + `icloud.*` (biometric auth, coordinated file sync)
+- **v0.3.0** (current) — `dictation.*` via WhisperKit, concurrent dispatch, macOS 14+
+- **v0.4.0** — `llm.generate` via Apple Foundation Models (macOS 26+)
+
+See [CHANGELOG.md](CHANGELOG.md) for release details.
 
 ## License
 
