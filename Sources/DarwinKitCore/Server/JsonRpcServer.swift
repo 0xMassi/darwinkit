@@ -13,6 +13,18 @@ public final class JsonRpcServer: NotificationSink {
     private let router: MethodRouter
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let outputLock = NSLock()
+
+    /// Requests are dispatched to this concurrent queue so a single
+    /// long-running handler (e.g. a 2-minute WhisperKit model compile)
+    /// doesn't block the stdin reader from processing the next request.
+    /// Each handler is responsible for its own thread-safety; output is
+    /// serialized via `outputLock` in `threadSafePrint`.
+    private let dispatchQueue = DispatchQueue(
+        label: "darwinkit.dispatch",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
 
     public init(router: MethodRouter) {
         self.router = router
@@ -76,13 +88,24 @@ public final class JsonRpcServer: NotificationSink {
             return
         }
 
-        do {
-            let result = try router.dispatch(request)
-            sendSuccess(id: request.id, result: result)
-        } catch let error as JsonRpcError {
-            sendError(id: request.id, error: error)
-        } catch {
-            sendError(id: request.id, error: .internalError(error.localizedDescription))
+        // Dispatch off the stdin-reader thread so slow handlers can't
+        // stall the server. Concurrent access to router.dispatch is
+        // safe: our handlers keep their own state thread-safe (the
+        // WhisperDictationProvider uses NSLock-based guards) and all
+        // output goes through the locked threadSafePrint.
+        dispatchQueue.async { [weak self] in
+            guard let self = self else { return }
+            do {
+                let result = try self.router.dispatch(request)
+                self.sendSuccess(id: request.id, result: result)
+            } catch let error as JsonRpcError {
+                self.sendError(id: request.id, error: error)
+            } catch {
+                self.sendError(
+                    id: request.id,
+                    error: .internalError(error.localizedDescription)
+                )
+            }
         }
     }
 
@@ -104,15 +127,24 @@ public final class JsonRpcServer: NotificationSink {
         ]
         if let data = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]),
            let str = String(data: data, encoding: .utf8) {
-            print(str)
+            threadSafePrint(str)
         }
     }
 
     private func writeLine(_ response: JsonRpcResponse) {
         if let data = try? encoder.encode(response),
            let str = String(data: data, encoding: .utf8) {
-            print(str)
+            threadSafePrint(str)
         }
+    }
+
+    /// All stdout writes go through here to prevent interleaved output from
+    /// concurrent threads (e.g. recognition callback + stdin handler).
+    private func threadSafePrint(_ str: String) {
+        outputLock.lock()
+        print(str)
+        fflush(stdout)
+        outputLock.unlock()
     }
 
     func log(_ message: String) {
