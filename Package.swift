@@ -15,6 +15,18 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.9.0"),
+        // Transitive pin: WhisperKit → swift-transformers pulls
+        // swift-collections, which ships a `_RopeModule` target starting
+        // at 1.4.x. That module's manifest uses a Swift language version
+        // setting that SwiftPM shipped with Xcode 16.4 (current GitHub
+        // Actions macos runner) can't parse, causing release CI to fail
+        // with `error: 'swift-collections': Some of the Swift language
+        // versions used in target '_RopeModule' settings are supported.
+        // (given: [5], supported: [])`. Pinning to 1.3.x (pre-rope)
+        // keeps CI green without losing any functionality WhisperKit or
+        // swift-transformers actually need. Revisit when the runner's
+        // Xcode is newer than 16.4.
+        .package(url: "https://github.com/apple/swift-collections.git", "1.1.0"..<"1.4.0"),
     ],
     targets: [
         .executableTarget(
